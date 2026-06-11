@@ -83,6 +83,81 @@ const getAlternativeLabel = (place, index) => {
   return { label: "✨ Pilihan Menarik", color: "text-[#B3673B]", bg: "bg-[#B3673B]/20" };
 };
 
+// --- FUNGSI HAVERSINE UNTUK MENGHITUNG JARAK ---
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius bumi dalam kilometer
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; 
+};
+
+// --- HELPER UNTUK BADGE JARAK LOKASI ---
+const getDistanceBadge = (distance) => {
+  if (distance < 1) return { label: "📍 Sangat Dekat", color: "text-[#00FFA3]", bg: "bg-[#00FFA3]/10" };
+  if (distance <= 3) return { label: "📍 Dekat", color: "text-[#00D4FF]", bg: "bg-[#00D4FF]/10" };
+  return { label: "📍 Agak Jauh", color: "text-[#A8A29E]", bg: "bg-[#2A2624]" };
+};
+
+// --- HELPER UNTUK SEARCH HIGHLIGHT ---
+const highlightText = (text, highlight) => {
+  if (!highlight.trim()) return text;
+  const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+  return parts.map((part, i) =>
+    part.toLowerCase() === highlight.toLowerCase() ?
+      <span key={i} className="text-[#E4B381] font-black">{part}</span> : part
+  );
+};
+
+// --- HELPER UNTUK STATUS OPERASIONAL (REALTIME) ---
+const checkOperationalStatus = (openHoursStr) => {
+  const defaultRes = { icon: '⚪', short: 'JAM TDK TERSEDIA', shortFull: 'JAM TIDAK TERSEDIA', detail: '⚪ Jam Operasional Tidak Tersedia', textCol: 'text-[#8C8681]' };
+  if (!openHoursStr) return defaultRes;
+
+  // Mencari pola seperti "08:00 - 22:00" atau "08.00 s/d 22.00"
+  const match = openHoursStr.match(/(\d{1,2})[.:](\d{2})\s*(?:s\/d|-|sampai)\s*(\d{1,2})[.:](\d{2})/i);
+  if (!match) return defaultRes;
+
+  const [_, sh, sm, eh, em] = match;
+  const startMin = parseInt(sh) * 60 + parseInt(sm);
+  let endMin = parseInt(eh) * 60 + parseInt(em);
+
+  const now = new Date();
+  const currentMin = now.getHours() * 60 + now.getMinutes();
+
+  let isOpen = false;
+  let minsToClose = 0;
+
+  if (endMin < startMin) {
+    // Melewati tengah malam (contoh: 15:00 - 02:00)
+    if (currentMin >= startMin || currentMin <= endMin) {
+      isOpen = true;
+      minsToClose = currentMin >= startMin ? (24 * 60 - currentMin) + endMin : endMin - currentMin;
+    }
+  } else {
+    // Normal (contoh: 08:00 - 22:00)
+    if (currentMin >= startMin && currentMin <= endMin) {
+      isOpen = true;
+      minsToClose = endMin - currentMin;
+    }
+  }
+
+  const formatTime = (h, m) => `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+  const openTimeFormatted = formatTime(sh, sm);
+  const closeTimeFormatted = formatTime(eh, em);
+
+  if (isOpen) {
+    if (minsToClose <= 60) {
+      return { icon: '🟠', short: 'SEGERA TUTUP', shortFull: 'SEGERA TUTUP', detail: `🟠 Segera Tutup • Tutup dalam ${minsToClose} menit`, textCol: 'text-[#FF9F43]' };
+    }
+    return { icon: '🟢', short: 'BUKA', shortFull: 'BUKA SEKARANG', detail: `🟢 Buka Sekarang • Tutup jam ${closeTimeFormatted}`, textCol: 'text-[#00FFA3]' };
+  }
+
+  return { icon: '🔴', short: 'TUTUP', shortFull: 'TUTUP', detail: `🔴 Tutup • Buka jam ${openTimeFormatted}`, textCol: 'text-[#FF4D4D]' };
+};
 
 // --- KOMPONEN VISUAL ---
 const BrandLogo = () => (
@@ -124,17 +199,25 @@ const CoffeeLineArtBg = () => (
   </div>
 );
 
-const StatusBadge = ({ status }) => {
+const StatusBadge = ({ status, openHours }) => {
   const configs = {
     sepi: { dot: "bg-[#00FFA3]", text: "text-[#00FFA3]/90", label: "SEPI" },
     normal: { dot: "bg-[#E4B381]", text: "text-[#E4B381]/90", label: "NORMAL" },
     ramai: { dot: "bg-[#FF4D4D]", text: "text-[#FF4D4D]/90", label: "RAMAI" }
   };
   const conf = configs[status] || configs.normal;
+  const opStat = checkOperationalStatus(openHours);
+
   return (
-    <div className="flex items-center gap-1.5 bg-[#12100E]/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/5">
+    <div className="flex items-center gap-1.5 bg-[#12100E]/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/5 w-max">
       <span className={`w-2 h-2 rounded-full ${conf.dot} shadow-[0_0_5px_currentColor]`}></span>
       <span className={`text-[9px] font-bold tracking-widest ${conf.text}`}>{conf.label}</span>
+      {openHours && (
+        <>
+          <span className="text-[#5C5651] text-[10px] mx-0.5">•</span>
+          <span className={`text-[9px] font-bold tracking-widest ${opStat.textCol}`}>{opStat.icon} {opStat.shortFull}</span>
+        </>
+      )}
     </div>
   );
 };
@@ -182,6 +265,7 @@ const CircularScoreBadge = ({ score, size = "md" }) => {
 // --- APP UTAMA ---
 export default function App() {
   const [view, setView] = useState('home'); 
+  const [lastView, setLastView] = useState('home'); // Menyimpan history layar sebelumnya
   
   // STATE SUPABASE
   const [placesDB, setPlacesDB] = useState([]);
@@ -190,6 +274,14 @@ export default function App() {
   const [results, setResults] = useState([]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   
+  // STATE PENCARIAN GLOBAL
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // State Pencarian Lokasi (Terdekat)
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationMsg, setLocationMsg] = useState('');
+
   // State Filter Pencarian
   const [pax, setPax] = useState(4);
   const [budget, setBudget] = useState('50000');
@@ -200,6 +292,11 @@ export default function App() {
   const [adminPin, setAdminPin] = useState('');
   const [editingPlace, setEditingPlace] = useState(null);
   const [formImagePreview, setFormImagePreview] = useState('');
+
+  // Derived state untuk autocomplete pencarian
+  const searchResults = placesDB
+    .filter(place => place.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .slice(0, 5);
 
   // 1. FUNGSI FETCH DARI SUPABASE (VIA REST API)
   const loadPlaces = async () => {
@@ -249,8 +346,53 @@ export default function App() {
   };
 
   const handleViewDetail = (place) => {
+    setLastView(view); // Simpan layar saat ini sebelum pindah ke detail
     setSelectedPlace(place);
     setView('detail');
+  };
+
+  // --- LOGIKA MENCARI CAFE TERDEKAT ---
+  const handleFindNearby = () => {
+    setLocationMsg('');
+    if (!navigator.geolocation) {
+      setLocationMsg("Browser Anda tidak mendukung fitur lokasi.");
+      return;
+    }
+    
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        const placesWithDistance = placesDB
+          .filter(p => p.latitude && p.longitude) // Pastikan data memiliki latitude & longitude
+          .map(place => ({
+            ...place,
+            distance: calculateDistance(latitude, longitude, place.latitude, place.longitude)
+          }))
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 10); // Ambil Top 10 terdekat
+        
+        if (placesWithDistance.length === 0) {
+          setLocationMsg("Belum ada data cafe yang memiliki titik koordinat.");
+          setIsLocating(false);
+          return;
+        }
+        
+        setResults(placesWithDistance);
+        setView('nearby_results');
+        setIsLocating(false);
+      },
+      (error) => {
+        setIsLocating(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationMsg("Aktifkan izin lokasi untuk melihat cafe terdekat.");
+        } else {
+          setLocationMsg("Gagal mendeteksi lokasi Anda. Silakan coba lagi.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   // --- LOGIKA ADMIN SUPABASE ---
@@ -291,6 +433,8 @@ export default function App() {
       has_ac: formData.get('ac') === 'on',
       area_indoor: formData.get('area_indoor') === 'on',
       area_outdoor: formData.get('area_outdoor') === 'on',
+      latitude: parseFloat(formData.get('latitude')) || null,
+      longitude: parseFloat(formData.get('longitude')) || null,
       city: 'Purwokerto'
     };
 
@@ -354,6 +498,72 @@ export default function App() {
             <CoffeeLineArtBg />
             <BrandLogo />
             
+            {/* --- GLOBAL SEARCH BAR --- */}
+            <div className="relative px-5 mb-6 z-30">
+              <div className="relative flex items-center w-full">
+                <Search className="absolute left-4 text-[#8C8681]" size={18} />
+                <input
+                  type="text"
+                  placeholder="Cari nama cafe..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setIsSearchFocused(true);
+                  }}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchResults.length > 0) {
+                      handleViewDetail(searchResults[0]);
+                      setSearchQuery('');
+                      setIsSearchFocused(false);
+                    }
+                  }}
+                  className="w-full bg-[#1C1917]/80 backdrop-blur-md border border-[#2A2624] text-white py-3.5 pl-11 pr-10 rounded-2xl focus:outline-none focus:border-[#E4B381] shadow-lg transition-colors placeholder:text-[#5C5651] text-sm"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-4 text-[#8C8681] hover:text-[#E4B381] transition-colors">
+                    <XCircle size={16} />
+                  </button>
+                )}
+              </div>
+
+              {/* Autocomplete Dropdown */}
+              {isSearchFocused && searchQuery && (
+                <div className="absolute top-full left-5 right-5 mt-2 bg-[#1C1917] border border-[#2A2624] rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {searchResults.length > 0 ? (
+                    searchResults.map((place) => (
+                      <button
+                        key={place.id}
+                        onClick={() => {
+                          handleViewDetail(place);
+                          setSearchQuery('');
+                        }}
+                        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-[#2A2624] transition-colors border-b border-[#2A2624] last:border-b-0"
+                      >
+                        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-[#2A2624]">
+                          <img src={place.image} alt={place.name} className="w-full h-full object-cover opacity-80" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white truncate">{highlightText(place.name, searchQuery)}</div>
+                          <div className="text-[10px] text-[#8C8681] truncate">{place.address}</div>
+                        </div>
+                        <div className="shrink-0">
+                           <ArrowLeft size={14} className="text-[#5C5651] rotate-180" />
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-6 text-center">
+                      <p className="text-sm text-[#8C8681] font-medium">Cafe tidak ditemukan</p>
+                      <p className="text-[10px] text-[#5C5651] mt-1">Coba kata kunci lain</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* --- END GLOBAL SEARCH BAR --- */}
+
             <div className="px-5 mb-4 text-center z-10 relative">
               <p className="text-[10px] font-bold text-[#B3673B] tracking-widest uppercase mb-1">Temukan Tempat Terbaik</p>
               <h2 className="text-xl font-medium text-[#8C8681] leading-tight">
@@ -410,10 +620,24 @@ export default function App() {
               <button 
                 onClick={handleSearch} 
                 disabled={isLoading}
-                className={`w-full bg-gradient-to-r from-[#E4B381] via-[#D48C5B] to-[#B3673B] text-[#12100E] font-black text-sm uppercase tracking-widest py-4 rounded-xl shadow-[0_4px_15px_rgba(179,103,59,0.3)] transition-opacity flex justify-center items-center gap-2 ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-95'}`}
+                className={`w-full bg-gradient-to-r from-[#E4B381] via-[#D48C5B] to-[#B3673B] text-[#12100E] font-black text-sm uppercase tracking-widest py-4 rounded-xl shadow-[0_4px_15px_rgba(179,103,59,0.3)] transition-opacity flex justify-center items-center gap-2 mb-3 ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-95'}`}
               >
                 <Search size={18} strokeWidth={2.5} /> {isLoading ? 'Menyiapkan Data...' : 'Cari Rekomendasi'}
               </button>
+
+              <button 
+                onClick={handleFindNearby}
+                disabled={isLocating || isLoading}
+                className={`w-full bg-[#12100E] border border-[#B3673B]/50 text-[#E4B381] font-bold text-sm uppercase tracking-widest py-3.5 rounded-xl hover:bg-[#B3673B]/10 transition-colors flex justify-center items-center gap-2 ${isLocating ? 'animate-pulse' : ''}`}
+              >
+                <Navigation size={18} /> {isLocating ? 'Mencari Lokasi...' : 'Cafe Terdekat Saya'}
+              </button>
+              
+              {locationMsg && (
+                <div className="mt-4 p-3 bg-[#FF4D4D]/10 border border-[#FF4D4D]/20 rounded-xl text-center animate-in fade-in">
+                  <p className="text-[11px] font-bold text-[#FF4D4D]">{locationMsg}</p>
+                </div>
+              )}
             </div>
             
             <div className="flex justify-center mt-12 mb-4">
@@ -457,7 +681,7 @@ export default function App() {
                       <div className="h-32 rounded-2xl overflow-hidden relative mb-4 border border-[#2A2624]">
                          <img src={results[0].image} alt={results[0].name} className="w-full h-full object-cover opacity-70" />
                          <div className="absolute inset-0 bg-gradient-to-t from-[#12100E] to-transparent"></div>
-                         <div className="absolute bottom-3 left-4"><StatusBadge status={results[0].status} /></div>
+                         <div className="absolute bottom-3 left-4"><StatusBadge status={results[0].status} openHours={results[0].openHours} /></div>
                       </div>
                       <h3 className="text-2xl font-bold text-white mb-1 leading-tight text-center">{results[0].name}</h3>
                       <p className="text-xs text-[#8C8681] text-center mb-6">{results[0].address}</p>
@@ -488,7 +712,12 @@ export default function App() {
                                   <div className="flex items-center gap-2 text-[10px] text-[#A8A29E] font-medium">
                                     <span className="flex items-center gap-1"><Wallet size={10} className="text-[#B3673B]"/> {place.budget === 0 ? 'Gratis' : `${place.budget / 1000}K`}</span>
                                     <span className="text-[#2A2624]">•</span>
-                                    <span className="uppercase text-[#8C8681]">{place.status}</span>
+                                    <span className="uppercase text-[#8C8681]">{place.status === 'sepi' ? 'SEPI' : place.status === 'normal' ? 'NORMAL' : 'RAMAI'}</span>
+                                    <span className="text-[#2A2624]">•</span>
+                                    {(() => {
+                                      const op = checkOperationalStatus(place.openHours);
+                                      return <span className={`font-bold ${op.textCol}`}>{op.icon} {op.short}</span>;
+                                    })()}
                                   </div>
                                 </div>
                                 <div className="pl-3 border-l border-[#2A2624] flex flex-col items-center justify-center min-w-[50px]">
@@ -512,17 +741,75 @@ export default function App() {
           </main>
         )}
 
+        {view === 'nearby_results' && (
+          <main className="animate-in fade-in slide-in-from-right-4 duration-500 pb-24 flex-1 overflow-y-auto">
+            <div className="pt-8 pb-4 px-5 sticky top-0 z-40 bg-[#12100E]/90 backdrop-blur-xl border-b border-[#1C1917] flex items-center gap-3">
+              <button onClick={() => setView('home')} className="w-8 h-8 bg-[#1C1917] rounded-full flex items-center justify-center text-[#8C8681] hover:text-white transition-colors border border-[#2A2624]">
+                <ArrowLeft size={16} />
+              </button>
+              <div>
+                <h2 className="text-sm font-bold text-white tracking-widest uppercase">10 Cafe Terdekat</h2>
+                <p className="text-[10px] text-[#B3673B] font-medium">Berdasarkan lokasi Anda saat ini</p>
+              </div>
+            </div>
+
+            <div className="px-4 mt-6">
+              <div className="space-y-4">
+                {results.map((place, index) => {
+                  const badge = getDistanceBadge(place.distance);
+                  return (
+                    <div key={place.id} onClick={() => handleViewDetail(place)} className="bg-[#1C1917] rounded-2xl border border-[#2A2624] overflow-hidden group cursor-pointer hover:border-[#E4B381]/50 transition-colors">
+                      <div className={`px-4 py-2 ${badge.bg} border-b border-[#2A2624]/50 flex justify-between items-center`}>
+                        <span className={`text-[10px] font-bold tracking-widest uppercase ${badge.color}`}>{badge.label}</span>
+                        <span className="text-[10px] font-black text-[#A8A29E]">#{index + 1}</span>
+                      </div>
+                      <div className="p-3 flex gap-4 items-center">
+                        <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden relative border border-[#2A2624]">
+                          <img src={place.image} alt={place.name} className="w-full h-full object-cover opacity-70" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-[#FAFAFA] truncate text-sm mb-1">{place.name}</h4>
+                          <div className="flex items-center gap-2 text-[10px] text-[#A8A29E] font-medium mt-1">
+                            <span className="flex items-center gap-1"><Wallet size={10} className="text-[#B3673B]"/> {place.budget === 0 ? 'Gratis' : `${place.budget / 1000}K`}</span>
+                            <span className="text-[#2A2624]">•</span>
+                            {place.rating_average > 0 && (
+                              <>
+                                <span className="flex items-center gap-1 text-[#E4B381]"><Star size={10} className="fill-[#E4B381]" /> {place.rating_average}</span>
+                                <span className="text-[#2A2624]">•</span>
+                              </>
+                            )}
+                            <span className="uppercase text-[#8C8681] truncate">{place.status === 'sepi' ? 'SEPI' : place.status === 'normal' ? 'NORMAL' : 'RAMAI'}</span>
+                            <span className="text-[#2A2624]">•</span>
+                            {(() => {
+                              const op = checkOperationalStatus(place.openHours);
+                              return <span className={`font-bold ${op.textCol} truncate`}>{op.icon} {op.short}</span>;
+                            })()}
+                          </div>
+                        </div>
+                        <div className="pl-3 border-l border-[#2A2624] flex flex-col items-center justify-center min-w-[65px]">
+                          <Navigation size={14} className="text-[#B3673B] mb-1" />
+                          <span className="font-black text-xs text-[#E4B381]">{place.distance.toFixed(1)} <span className="text-[9px] text-[#8C8681]">km</span></span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </main>
+        )}
+
         {view === 'detail' && selectedPlace && (
           <main className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex-1 overflow-y-auto bg-[#12100E] flex flex-col">
             <div className="relative h-72 shrink-0">
               <img src={selectedPlace.image} alt={selectedPlace.name} className="w-full h-full object-cover opacity-60" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#12100E] via-[#12100E]/40 to-transparent"></div>
-              <button onClick={() => setView('results')} className="absolute top-6 left-4 w-10 h-10 bg-[#12100E]/60 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-[#1C1917] transition-colors border border-white/10 z-10">
+              <button onClick={() => setView(lastView)} className="absolute top-6 left-4 w-10 h-10 bg-[#12100E]/60 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-[#1C1917] transition-colors border border-white/10 z-10">
                 <ArrowLeft size={20} />
               </button>
               <div className="absolute bottom-0 left-0 w-full px-5 pb-5 translate-y-4">
                 <div className="flex justify-between items-end mb-3">
-                  <StatusBadge status={selectedPlace.status} />
+                  <StatusBadge status={selectedPlace.status} openHours={selectedPlace.openHours} />
                   {selectedPlace.score && (
                     <div className="bg-[#1C1917]/90 backdrop-blur-md border border-[#B3673B]/30 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
                       <span className="text-[9px] text-[#8C8681] font-bold uppercase tracking-widest">Nongki Score</span>
@@ -554,7 +841,11 @@ export default function App() {
               <div className="grid grid-cols-2 gap-3 mb-8">
                 <div className="bg-[#1C1917] border border-[#2A2624] rounded-2xl p-4 flex flex-col justify-center">
                   <span className="text-[10px] text-[#8C8681] font-bold uppercase tracking-widest mb-1 flex items-center gap-1"><Clock size={12}/> Jam Operasional</span>
-                  <span className="text-sm font-bold text-white">{selectedPlace.openHours}</span>
+                  <span className="text-sm font-bold text-white mb-1.5">{selectedPlace.openHours}</span>
+                  {(() => {
+                    const opStat = checkOperationalStatus(selectedPlace.openHours);
+                    return <span className={`text-[10px] font-medium ${opStat.textCol}`}>{opStat.detail}</span>;
+                  })()}
                 </div>
                 <div className="bg-[#1C1917] border border-[#2A2624] rounded-2xl p-4 flex flex-col justify-center">
                   <span className="text-[10px] text-[#8C8681] font-bold uppercase tracking-widest mb-1 flex items-center gap-1"><Wallet size={12}/> Estimasi Harga</span>
@@ -767,6 +1058,17 @@ export default function App() {
                   </div>
                 </div>
                 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#8C8681] mb-2 uppercase tracking-wider">Latitude</label>
+                    <input type="number" step="any" name="latitude" defaultValue={editingPlace?.latitude || ''} className="w-full bg-[#12100E] border border-[#2A2624] text-white p-4 rounded-xl text-sm focus:outline-none focus:border-[#E4B381] transition-colors" placeholder="-7.4313" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#8C8681] mb-2 uppercase tracking-wider">Longitude</label>
+                    <input type="number" step="any" name="longitude" defaultValue={editingPlace?.longitude || ''} className="w-full bg-[#12100E] border border-[#2A2624] text-white p-4 rounded-xl text-sm focus:outline-none focus:border-[#E4B381] transition-colors" placeholder="109.2478" />
+                  </div>
+                </div>
+
                 <div>
                     <label className="block text-[11px] font-bold text-[#8C8681] mb-2 uppercase tracking-wider">Status Awal</label>
                     <select name="status" defaultValue={editingPlace?.status || 'normal'} className="w-full bg-[#12100E] border border-[#2A2624] text-white p-4 rounded-xl text-sm focus:outline-none focus:border-[#E4B381] transition-colors appearance-none">
