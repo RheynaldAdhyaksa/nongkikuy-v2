@@ -6,6 +6,7 @@ import {
   Flame, ChevronDown, Trophy, Clock, Navigation,
   Lock, Edit3, Plus, Trash2, Save, Users, Star, Info
 } from 'lucide-react';
+import CafeMap from './components/CafeMap';
 
 const supabaseUrl = 'https://shcsqmybgigbymdacoke.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNoY3NxbXliZ2lnYnltZGFjb2tlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTc2OTMsImV4cCI6MjA5NTg3MzY5M30.Az_3c6dweX1hZhrG6fVKIYYAZrrZOS6JU5ezR81vV5M';
@@ -659,7 +660,7 @@ export default function App() {
                   </div>
                </div>
 
-               {/* DESKTOP KOLOM KANAN (Visual Dinamis dari DB yang Bisa Diklik) */}
+             {/* DESKTOP KOLOM KANAN (Visual Dinamis dari DB yang Bisa Diklik) */}
                <div className="w-[45%] xl:w-[50%] flex justify-end relative mt-16 z-10">
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-[#B3673B]/10 rounded-full blur-[100px] pointer-events-none"></div>
 
@@ -720,7 +721,14 @@ export default function App() {
               <div>
                 <h2 className="text-sm font-bold text-white tracking-widest uppercase">Hasil Rekomendasi</h2>
                 <p className="text-[10px] text-[#B3673B] font-medium">Berdasarkan kebutuhan tim Anda</p>
-              </div>
+              </div><button
+  onClick={() => {
+    setLastView(view);
+    setView('places');
+  }}
+>
+  PETA
+</button>
             </div>
 
             <div className="px-4 mt-6 md:px-8 md:max-w-[1200px] md:mx-auto">
@@ -858,7 +866,26 @@ export default function App() {
             </div>
           </main>
         )}
-
+{view === 'places' && (
+          <main className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex-1 flex flex-col h-screen bg-[#12100E]">
+            <div className="pt-8 pb-4 px-5 sticky top-0 z-40 bg-[#12100E]/90 backdrop-blur-xl border-b border-[#1C1917] flex items-center gap-3 shrink-0">
+              <button onClick={() => setView(lastView === 'places' ? 'home' : lastView)} className="w-8 h-8 bg-[#1C1917] rounded-full flex items-center justify-center text-[#8C8681] hover:text-white transition-colors border border-[#2A2624]">
+                <ArrowLeft size={16} />
+              </button>
+              <div>
+                <h2 className="text-sm font-bold text-white tracking-widest uppercase">Peta Eksplorasi</h2>
+                <p className="text-[10px] text-[#B3673B] font-medium">Temukan lokasi cafe</p>
+              </div>
+            </div>
+            
+            <div className="flex-1 p-4 pb-24 lg:pb-8 w-full md:max-w-5xl lg:max-w-[1200px] mx-auto">
+              <CafeMap 
+                places={lastView === 'results' || lastView === 'nearby_results' ? results : placesDB} 
+                onPlaceClick={handleViewDetail} 
+              />
+            </div>
+          </main>
+        )}
         {view === 'detail' && selectedPlace && (
           <main className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex-1 overflow-y-auto bg-[#12100E] flex flex-col md:flex-row md:items-start md:max-w-[1200px] md:mx-auto md:w-full md:pt-10 md:px-8 md:gap-12 lg:gap-20">
             {/* Desktop Kolom Kiri - Gambar */}
