@@ -779,9 +779,7 @@ export default function App() {
                    <div className="w-10 h-10 bg-gradient-to-br from-[#F5D6A1] to-[#B3673B] rounded-xl flex items-center justify-center font-black text-[#12100E] text-xl shadow-[0_0_15px_rgba(228,179,129,0.3)]">N</div>
                    <span className="font-black text-xl text-white tracking-tight">NONGKI<span className="text-[#E4B381]">KUY</span></span>
                 </div>
-                <button onClick={() => setView('admin_login')} className="text-sm font-bold text-[#8C8681] hover:text-[#E4B381] transition-colors flex items-center gap-2">
-                  <Lock size={14} /> Partner Login
-                </button>
+
               </header>
 
               {/* SPLIT HERO SECTION */}
