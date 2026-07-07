@@ -765,11 +765,7 @@ export default function App() {
                 )}
               </div>
               
-              <div className="flex justify-center mt-12 mb-4">
-                <button onClick={() => setView('admin_login')} className="flex items-center gap-1.5 text-[10px] font-bold text-[#2A2624] hover:text-[#5C5651] transition-colors">
-                  <Lock size={10} /> Partner Login
-                </button>
-              </div>
+   
             </main>
 
             {/* ==================================================================================== */}
